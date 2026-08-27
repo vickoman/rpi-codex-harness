@@ -37,6 +37,67 @@ ni hacer commits automáticos.
   antes de la primera escritura de código.
 - No hay commits, despliegues, PRs, rollbacks ni escrituras externas automáticas.
 
+## Uso desde la terminal
+
+Los skills de este repositorio se mantienen locales y no se instalan globalmente
+por defecto. Para hacerlos accesibles desde cualquier proyecto se configuró una
+función opcional en `~/.aliases`:
+
+```zsh
+function codex-rpi() {
+	local task="$*"
+	local harness="$HOME/vicko/rpi-codex-harness"
+	local instructions="Usa el harness RPI local en $harness. Comienza con rpi-next start para esta tarea y sigue las transiciones legales. No asumas decisiones materiales: detente ante brechas o gates y pregúntame. No hagas commits, push, rollback ni deploy salvo que te lo pida explícitamente."
+
+	if [[ -n "$task" ]]; then
+		codex -C "$PWD" --add-dir "$harness" "$instructions"$'\n\nTarea:\n'"$task"
+	else
+		codex -C "$PWD" --add-dir "$harness" "$instructions"
+	fi
+}
+```
+
+La función reemplazó el alias inicial que solo ejecutaba `codex` con
+`--add-dir`. Se valida con `zsh -n ~/.aliases` y se recarga con:
+
+```bash
+source ~/.aliases
+```
+
+### Ejemplos
+
+Desde el repositorio objetivo:
+
+```bash
+cd ~/proyectos/mi-repo
+codex-rpi "VFE-566: agrega rate limiting al endpoint de login"
+```
+
+Sin ticket:
+
+```bash
+codex-rpi "Corrige el manejo de errores del importador CSV"
+```
+
+Sin argumentos, abre Codex con las reglas RPI cargadas para escribir la tarea
+dentro de la sesión:
+
+```bash
+codex-rpi
+```
+
+El ticket, si existe, se incorpora al `run-id`; de lo contrario se usa
+`NO-TICKET`. Los artefactos se guardan en el repositorio objetivo bajo
+`.codex/rpi/runs/<run-id>/`. Después de cada pausa puede pedirse:
+
+```text
+Continúa con el siguiente paso legal.
+```
+
+La función no instala skills, no modifica el repositorio objetivo por sí misma y
+no autoriza commits. Un commit debe solicitarse explícitamente después de revisar
+el diff.
+
 ## Ciclo semanal de mejora
 
 Cada semana, revisar ejecuciones reales y registrar aquí una entrada con:
@@ -76,3 +137,4 @@ paso.
 | 2026-08-27 | Se añadió `mode: diff` a `rpi-review` y su eval de cambio fuera de alcance. | `rpi-review/SKILL.md` y `evals/rpi-review-diff-001-rejects-out-of-scope.md`. | Validar estructura y ejecutar únicamente en fixture aislado. |
 | 2026-08-27 | Se completó la integración de `rpi-next` con la tabla de transiciones y la matriz E2E. | `rpi-next/SKILL.md`, `evals/rpi-next-e2e-001-transition-matrix.md`; Codex devolvió los 7 handoffs, mantuvo el gate standard falso, bloqueó `DIFF_REJECTED`, trató `CLOSED_UNCOMMITTED` como terminal y pidió `run_id` ante 8 runs activos. Fixture limpio y código fuente sin cambios. | Integración funcional completa para revisión humana; instalación, commits y empaquetado quedan fuera hasta autorización explícita. |
 | 2026-08-27 | Eval RPI Review Diff 001 aprobado. | Fixture temporal `NO-TICKET--20260827T190000Z--login-rate-limit--d001`: `DIFF_REJECTED`, hunk autorizado separado del archivo `src/auth/debug.ts` fuera de alcance, validación repetida, sin rollback/commit y gate de diff falso. | Mantener archivos no rastreados visibles en la revisión; `git diff` por sí solo no basta para detectar deriva. |
+| 2026-08-27 | Se parametrizó el acceso desde terminal con `codex-rpi`. | `~/.aliases`: función con tarea opcional, ticket o `NO-TICKET`, `--add-dir` al harness y guardrails RPI automáticos. | Mantener como comodidad local; documentar aquí, sin convertirlo en dependencia portable del repositorio. |
