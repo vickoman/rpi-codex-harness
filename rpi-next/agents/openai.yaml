@@ -1,0 +1,3 @@
+interface:
+  display_name: "Rpi Next"
+  short_description: "Route legal RPI transitions and handoffs"
