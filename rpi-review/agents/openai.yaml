@@ -1,3 +1,0 @@
-interface:
-  display_name: "Rpi Review"
-  short_description: "Review RPI plans and diffs without changing code"

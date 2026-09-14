@@ -1,0 +1,6 @@
+interface:
+  display_name: "RPI"
+  short_description: "Controlled code changes with evidence and gates"
+  default_prompt: "Usa $rpi para ejecutar este cambio de código de forma controlada."
+policy:
+  allow_implicit_invocation: true
