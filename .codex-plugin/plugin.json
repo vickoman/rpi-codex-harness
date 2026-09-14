@@ -1,0 +1,27 @@
+{
+  "name": "rpi-codex-harness",
+  "version": "0.2.0",
+  "description": "Evidence-driven Research, Plan, Implement workflow for controlled code changes in Codex.",
+  "author": {
+    "name": "vickoman",
+    "url": "https://github.com/vickoman"
+  },
+  "homepage": "https://github.com/vickoman/rpi-codex-harness",
+  "repository": "https://github.com/vickoman/rpi-codex-harness",
+  "keywords": ["codex", "rpi", "planning", "code-review", "workflow"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "RPI Codex Harness",
+    "shortDescription": "Controlled research, planning, implementation, and review.",
+    "longDescription": "Runs code changes through evidence-backed research, an executable plan, human-gated implementation, validation, and conversational diff acceptance.",
+    "developerName": "vickoman",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/vickoman/rpi-codex-harness",
+    "defaultPrompt": [
+      "Usa RPI para ejecutar este cambio de código de forma controlada.",
+      "Continúa el run RPI activo hasta el siguiente gate humano.",
+      "Muéstrame el estado y la siguiente transición del run RPI."
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "cases": [
+    {
+      "id": "rpi-research-001-stale-graphify",
+      "phase": "research",
+      "fixture": "stale_graphify",
+      "expected": ["reject_stale_graph", "inspect_source", "research_complete", "no_source_mutation"]
+    },
+    {
+      "id": "rpi-plan-001-material-gap",
+      "phase": "plan",
+      "fixture": "missing_rate_limit_topology",
+      "expected": ["gap_opened", "no_plan_ready", "no_source_mutation"]
+    },
+    {
+      "id": "rpi-review-plan-001-unverifiable-high-risk",
+      "phase": "review_plan",
+      "fixture": "invalid_validation_command",
+      "expected": ["plan_rejected", "actionable_findings", "no_source_mutation"]
+    },
+    {
+      "id": "rpi-implement-001-human-gate",
+      "phase": "implement",
+      "fixture": "high_risk_gate_false",
+      "expected": ["preflight_recorded", "implementation_approval_pending", "no_source_mutation"]
+    },
+    {
+      "id": "rpi-review-diff-001-out-of-scope",
+      "phase": "review_diff",
+      "fixture": "unexpected_file",
+      "expected": ["diff_rejected", "unexpected_file_preserved", "no_reviewer_mutation"]
+    },
+    {
+      "id": "rpi-next-e2e-001-transition-matrix",
+      "phase": "state_machine",
+      "fixture": "all_states",
+      "expected": ["all_legal_transitions", "all_illegal_transitions_rejected"]
+    },
+    {
+      "id": "rpi-baseline-002-dirty-worktree",
+      "phase": "baseline",
+      "fixture": "dirty_tracked_and_untracked",
+      "expected": ["preexisting_changes_preserved", "rpi_delta_isolated"]
+    },
+    {
+      "id": "rpi-state-002-gap-resume",
+      "phase": "state_machine",
+      "fixture": "gap_from_each_phase",
+      "expected": ["user_answer_required", "resume_origin_state"]
+    },
+    {
+      "id": "rpi-state-002-concurrency",
+      "phase": "state_machine",
+      "fixture": "concurrent_events",
+      "expected": ["valid_json", "no_lost_update", "atomic_latest"]
+    },
+    {
+      "id": "rpi-language-002-live-smoke",
+      "phase": "end_to_end",
+      "fixture": "calculator_bug",
+      "live": true,
+      "expected": ["diff_acceptance_pending", "tests_pass", "no_commit", "no_out_of_scope_mutation"]
+    }
+  ]
+}
