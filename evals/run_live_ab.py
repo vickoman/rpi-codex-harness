@@ -20,6 +20,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skills" / "rpi" / "scripts"))
 
 from rpi_core import HARNESS_VERSION, harness_content_digest, harness_git_ref  # noqa: E402
+from typesafe_grader import (  # noqa: E402
+    DEFAULT_MODEL as DEFAULT_TYPESAFE_MODEL,
+    DEFAULT_TIMEOUT_SECONDS as DEFAULT_TYPESAFE_TIMEOUT,
+    grade_with_typesafe,
+)
 
 
 def run(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -118,6 +123,27 @@ def summarize_records(records: list[dict]) -> dict:
     return summary
 
 
+def summarize_semantic_grades(records: list[dict]) -> dict:
+    statuses: dict[str, int] = {}
+    values: dict[str, list[float]] = {}
+    for record in records:
+        semantic = record.get("semantic_grade")
+        if not semantic:
+            continue
+        status = str(semantic.get("status", "unknown"))
+        statuses[status] = statuses.get(status, 0) + 1
+        if status != "success":
+            continue
+        for name, answer in semantic.get("answers", {}).items():
+            value = answer.get("noul", answer.get("confidence"))
+            if isinstance(value, (int, float)):
+                values.setdefault(name, []).append(float(value))
+    return {
+        "status_counts": statuses,
+        "metrics": {name: metric_summary(items) for name, items in sorted(values.items())},
+    }
+
+
 def grade(repo: Path) -> dict:
     manifests = list((repo / ".codex" / "rpi" / "runs").glob("*/manifest.json"))
     state = None
@@ -138,7 +164,17 @@ def grade(repo: Path) -> dict:
     return {"passed": all(criteria.values()), "criteria": criteria, "state": state, "git_status": changed}
 
 
-def execute_one(repo: Path, variant: str, model: str, reasoning: str, output: Path) -> dict:
+def execute_one(
+    repo: Path,
+    variant: str,
+    model: str,
+    reasoning: str,
+    output: Path,
+    *,
+    typesafe_semantic_grade: bool = False,
+    typesafe_model: str = DEFAULT_TYPESAFE_MODEL,
+    typesafe_timeout: float = DEFAULT_TYPESAFE_TIMEOUT,
+) -> dict:
     command = [
         "codex", "exec", "--json", "--ephemeral", "--ignore-user-config",
         "-C", str(repo), "-s", "workspace-write", "-m", model,
@@ -155,7 +191,7 @@ def execute_one(repo: Path, variant: str, model: str, reasoning: str, output: Pa
             events.append(json.loads(line))
         except json.JSONDecodeError:
             pass
-    return {
+    record = {
         "returncode": result.returncode,
         "duration_seconds": round(duration, 3),
         "event_count": len(events),
@@ -163,6 +199,15 @@ def execute_one(repo: Path, variant: str, model: str, reasoning: str, output: Pa
         "stderr": result.stderr[-2000:],
         "grade": grade(repo),
     }
+    if typesafe_semantic_grade:
+        record["semantic_grade"] = grade_with_typesafe(
+            repo,
+            prompt_for(variant),
+            enabled=True,
+            model=typesafe_model,
+            timeout=typesafe_timeout,
+        )
+    return record
 
 
 def main() -> int:
@@ -171,9 +216,18 @@ def main() -> int:
     parser.add_argument("--reasoning-effort", default="high")
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--output-dir")
+    parser.add_argument(
+        "--typesafe-semantic-grade",
+        action="store_true",
+        help="Opt in to sending bounded disposable-run evidence to TypeSafe for non-authoritative grading.",
+    )
+    parser.add_argument("--typesafe-model", default=DEFAULT_TYPESAFE_MODEL)
+    parser.add_argument("--typesafe-timeout", type=float, default=DEFAULT_TYPESAFE_TIMEOUT)
     args = parser.parse_args()
     if args.repetitions < 1:
         parser.error("--repetitions must be positive")
+    if args.typesafe_timeout <= 0:
+        parser.error("--typesafe-timeout must be positive")
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output_dir = Path(args.output_dir).resolve() if args.output_dir else ROOT / "evals" / "results" / stamp
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -187,7 +241,16 @@ def main() -> int:
                 record = {
                     "variant": variant,
                     "repetition": repetition,
-                    **execute_one(repo, variant, args.model, args.reasoning_effort, raw),
+                    **execute_one(
+                        repo,
+                        variant,
+                        args.model,
+                        args.reasoning_effort,
+                        raw,
+                        typesafe_semantic_grade=args.typesafe_semantic_grade,
+                        typesafe_model=args.typesafe_model,
+                        typesafe_timeout=args.typesafe_timeout,
+                    ),
                 }
                 records.append(record)
                 print(json.dumps(record, ensure_ascii=False))
@@ -201,6 +264,7 @@ def main() -> int:
         "reasoning_effort": args.reasoning_effort,
         "repetitions": args.repetitions,
         "by_variant": summarize_records(records),
+        "semantic_grading": summarize_semantic_grades(records),
         "records": records,
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
