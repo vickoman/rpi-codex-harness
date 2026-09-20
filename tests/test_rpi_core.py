@@ -16,10 +16,12 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(ROOT / "evals"))
 
 import rpi_core  # noqa: E402
+import typesafe_grader  # noqa: E402
 from rpi_core import RPIError, apply_event, compute_delta, harness_content_digest, load_run, start_run  # noqa: E402
 from rpi_bootstrap import apply as apply_bootstrap  # noqa: E402
 from rpi_log import redact  # noqa: E402
-from run_live_ab import summarize_records  # noqa: E402
+from run_live_ab import summarize_records, summarize_semantic_grades  # noqa: E402
+from typesafe_grader import MAX_FIELD_CHARS, collect_eval_state, grade_with_typesafe  # noqa: E402
 
 
 def command(root: Path, *args: str) -> None:
@@ -315,6 +317,129 @@ class LiveEvalSummaryTests(unittest.TestCase):
         self.assertEqual(summary["es"]["pass_rate"], 0.5)
         self.assertEqual(summary["es"]["duration_seconds"]["mean"], 12.0)
         self.assertEqual(summary["en"]["usage"]["total_tokens"]["ci95"], [90.0, 90.0])
+
+    def test_semantic_summary_is_separate_from_deterministic_pass_rate(self) -> None:
+        records = [
+            {
+                "grade": {"passed": False},
+                "semantic_grade": {
+                    "status": "success",
+                    "answers": {
+                        "research_supported": {"noul": 0.8},
+                        "diff_alignment": {"choice": "aligned", "confidence": 0.9},
+                    },
+                },
+            },
+            {"grade": {"passed": True}, "semantic_grade": {"status": "error"}},
+        ]
+        summary = summarize_semantic_grades(records)
+        self.assertEqual(summary["status_counts"], {"success": 1, "error": 1})
+        self.assertEqual(summary["metrics"]["research_supported"]["mean"], 0.8)
+        self.assertFalse(records[0]["grade"]["passed"])
+
+
+class TypeSafeGraderTests(RepoCase):
+    class FakeAnswer:
+        def __init__(self, **values: object) -> None:
+            self.__dict__.update(values)
+
+    class FakeUsage:
+        input_tokens = 123
+        output_tokens = 0
+
+    class FakeResponse:
+        usage = None
+        answers = {}
+
+    class FakeClient:
+        response = None
+        error = None
+
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+        def system_one(self, **kwargs: object) -> object:
+            if self.error is not None:
+                raise self.error
+            return self.response
+
+        def close(self) -> None:
+            return None
+
+    class FakeSDK:
+        TypeSafeClient = None
+
+        @staticmethod
+        def Noul(**kwargs: object) -> dict:
+            return {"type": "noul", **kwargs}
+
+        @staticmethod
+        def Choice(**kwargs: object) -> dict:
+            return {"type": "choice", **kwargs}
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.run_dir, _ = self.start()
+        (self.run_dir / "RESEARCH.md").write_text("evidence\n", encoding="utf-8")
+        self.sdk = self.FakeSDK()
+        self.client = self.FakeClient
+        self.sdk.TypeSafeClient = self.client
+
+    def test_disabled_and_missing_key_do_not_load_or_call_sdk(self) -> None:
+        disabled = grade_with_typesafe(self.root, "task", enabled=False, environ={}, sdk=self.sdk)
+        missing = grade_with_typesafe(self.root, "task", enabled=True, environ={}, sdk=self.sdk)
+        self.assertEqual(disabled["status"], "disabled")
+        self.assertEqual(missing["status"], "not_configured")
+
+    def test_missing_sdk_is_reported_without_failing(self) -> None:
+        with mock.patch.object(typesafe_grader, "_load_sdk", side_effect=ModuleNotFoundError):
+            result = grade_with_typesafe(
+                self.root, "task", enabled=True, environ={"TYPESAFE_API_KEY": "secret"}
+            )
+        self.assertEqual(result["status"], "sdk_unavailable")
+        self.assertFalse(result["authoritative"])
+
+    def test_success_serializes_answers_and_usage(self) -> None:
+        response = self.FakeResponse()
+        response.usage = self.FakeUsage()
+        response.answers = {
+            "research_supported": self.FakeAnswer(noul=0.91),
+            "diff_alignment": self.FakeAnswer(
+                choice="aligned", confidence=0.87, probabilities={"aligned": 0.87, "incomplete": 0.13}
+            ),
+        }
+        self.client.response = response
+        self.client.error = None
+        result = grade_with_typesafe(
+            self.root, "task", enabled=True, environ={"TYPESAFE_API_KEY": "secret"}, sdk=self.sdk
+        )
+        self.assertEqual(result["status"], "success")
+        self.assertFalse(result["authoritative"])
+        self.assertEqual(result["answers"]["research_supported"]["noul"], 0.91)
+        self.assertEqual(result["answers"]["diff_alignment"]["choice"], "aligned")
+        self.assertEqual(result["usage"], {"input_tokens": 123, "output_tokens": 0})
+        self.assertNotIn("secret", json.dumps(result))
+
+    def test_service_failure_is_contained(self) -> None:
+        self.client.response = None
+        self.client.error = TimeoutError("secret should not escape")
+        result = grade_with_typesafe(
+            self.root, "task", enabled=True, environ={"TYPESAFE_API_KEY": "secret"}, sdk=self.sdk
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_type"], "TimeoutError")
+        self.assertNotIn("secret", json.dumps(result))
+
+    def test_collected_state_bounds_artifacts(self) -> None:
+        (self.run_dir / "PLAN.md").write_text("x" * (MAX_FIELD_CHARS + 25), encoding="utf-8")
+        state = collect_eval_state(self.root, "task")
+        self.assertIn("[truncated 25 characters]", state["artifacts"]["PLAN.md"])
+
+    def test_collected_state_includes_staged_product_changes(self) -> None:
+        (self.root / "app.py").write_text("def value():\n    return 'staged'\n", encoding="utf-8")
+        command(self.root, "git", "add", "app.py")
+        state = collect_eval_state(self.root, "task")
+        self.assertIn("return 'staged'", state["product_diff"])
 
 
 class BootstrapTests(RepoCase):
