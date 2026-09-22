@@ -20,7 +20,7 @@ from typing import Any, Iterator
 
 
 SCHEMA_VERSION = "2.0"
-HARNESS_VERSION = "0.2.0"
+HARNESS_VERSION = "0.3.0"
 ARTIFACT_REL = Path(".codex/rpi")
 MAX_SNAPSHOT_BYTES = 25 * 1024 * 1024
 TERMINAL_STATES = {"closed_uncommitted"}
@@ -310,9 +310,14 @@ def start_run(
     risk_mode: str = "standard",
     model: str = "unknown",
     reasoning_effort: str = "unknown",
+    jev_enabled: bool = False,
+    jev_model: str = "jev-latest",
+    jev_timeout: float = 30.0,
 ) -> tuple[Path, dict[str, Any]]:
     if risk_mode not in {"simple", "standard", "high-risk"}:
         raise RPIError(f"invalid risk mode: {risk_mode}")
+    if jev_timeout <= 0:
+        raise RPIError("Jev timeout must be positive")
     ticket = _ticket(ticket)
     project = resolve_project_root(project_root)
     initial_paths = changed_paths(project)
@@ -358,6 +363,13 @@ def start_run(
                 "diff": {"granted": False},
             },
             "technical_diff_review": {"completed": False},
+            "jev": {
+                "enabled": jev_enabled,
+                "authoritative": False,
+                "model": jev_model,
+                "timeout_seconds": jev_timeout,
+                "reviews": {},
+            },
             "runtime": {
                 "codex_version": codex_version(),
                 "model": model,
@@ -699,5 +711,6 @@ def status_payload(manifest: dict[str, Any]) -> dict[str, Any]:
         "head_sha": manifest["baseline"]["head_sha"],
         "material_gaps_open": manifest["material_gaps_open"],
         "review_revision_count": manifest["review_revision_count"],
+        "jev": manifest.get("jev", {"enabled": False, "authoritative": False, "reviews": {}}),
         "warnings": manifest["warnings"],
     }

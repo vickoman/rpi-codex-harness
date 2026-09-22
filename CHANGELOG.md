@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-09-21
+
+- Añade `$rpi --jev` como modo opt-in persistido por run.
+- Incorpora revisiones Jev consultivas y fail-open después de Research, Plan e
+  Implement, con artifacts JSON separados.
+- Mantiene la máquina de estados, riesgo y gates humanos como autoridades.
+- Documenta configuración, privacidad, estados degradados y uso sin Jev.
+
 ## 0.2.0 — 2026-09-14
 
 - Empaqueta el harness como plugin con un único skill `rpi` autocontenido.

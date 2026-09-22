@@ -13,6 +13,14 @@ Las fases de solo lectura pueden continuar en el mismo turno. La ejecución se
 detiene ante una brecha material, evidencia insuficiente, deriva del baseline o
 un gate humano pendiente.
 
+## Revisión semántica opcional
+
+Un run iniciado explícitamente con `--jev` registra revisiones semánticas
+consultivas al final de Research, Plan e Implement. Estas revisiones son
+fail-open y no añaden transiciones: la máquina de estados, la revisión técnica
+determinista y las decisiones humanas siguen siendo autoritativas. Sin el flag,
+no se importa el SDK ni se envía contenido a TypeSafe.
+
 ## Principios
 
 1. **Evidencia antes de diseño.** Los hechos materiales citan código, comandos o

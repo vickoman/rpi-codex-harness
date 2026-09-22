@@ -16,10 +16,12 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(ROOT / "evals"))
 
 import rpi_core  # noqa: E402
+import rpi_jev  # noqa: E402
 import typesafe_grader  # noqa: E402
 from rpi_core import RPIError, apply_event, compute_delta, harness_content_digest, load_run, start_run  # noqa: E402
 from rpi_bootstrap import apply as apply_bootstrap  # noqa: E402
 from rpi_log import redact  # noqa: E402
+from rpi_jev import review_phase  # noqa: E402
 from run_live_ab import summarize_records, summarize_semantic_grades  # noqa: E402
 from typesafe_grader import MAX_FIELD_CHARS, collect_eval_state, grade_with_typesafe  # noqa: E402
 
@@ -440,6 +442,141 @@ class TypeSafeGraderTests(RepoCase):
         command(self.root, "git", "add", "app.py")
         state = collect_eval_state(self.root, "task")
         self.assertIn("return 'staged'", state["product_diff"])
+
+
+class JevPhaseReviewTests(RepoCase):
+    class FakeAnswer:
+        def __init__(self, **values: object) -> None:
+            self.__dict__.update(values)
+
+    class FakeResponse:
+        usage = None
+        answers = {}
+
+    class FakeClient:
+        response = None
+        error = None
+        calls = []
+
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+        def system_one(self, **kwargs: object) -> object:
+            self.calls.append(kwargs)
+            if self.error is not None:
+                raise self.error
+            return self.response
+
+        def close(self) -> None:
+            return None
+
+    class FakeSDK:
+        TypeSafeClient = None
+
+        @staticmethod
+        def Noul(**kwargs: object) -> dict:
+            return {"type": "noul", **kwargs}
+
+        @staticmethod
+        def Choice(**kwargs: object) -> dict:
+            return {"type": "choice", **kwargs}
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.sdk = self.FakeSDK()
+        self.sdk.TypeSafeClient = self.FakeClient
+        self.FakeClient.calls = []
+        self.FakeClient.error = None
+
+    def test_start_is_opt_in_and_records_configuration(self) -> None:
+        _, disabled = self.start()
+        self.assertFalse(disabled["jev"]["enabled"])
+        _, enabled = start_run(
+            self.root,
+            "Review with Jev",
+            jev_enabled=True,
+            jev_model="jev-test",
+            jev_timeout=12.0,
+        )
+        self.assertTrue(enabled["jev"]["enabled"])
+        self.assertFalse(enabled["jev"]["authoritative"])
+        self.assertEqual(enabled["jev"]["model"], "jev-test")
+
+    def test_disabled_review_does_not_write_artifact(self) -> None:
+        run_dir, _ = self.start()
+        result = review_phase(run_dir, "research", environ={}, sdk=self.sdk)
+        self.assertEqual(result["status"], "disabled")
+        self.assertFalse((run_dir / "JEV_RESEARCH_REVIEW.json").exists())
+        self.assertEqual(self.FakeClient.calls, [])
+
+    def test_missing_key_is_fail_open_and_recorded(self) -> None:
+        run_dir, _ = start_run(self.root, "Review with Jev", jev_enabled=True)
+        (run_dir / "RESEARCH.md").write_text("Evidence\n", encoding="utf-8")
+        result = review_phase(run_dir, "research", environ={}, sdk=self.sdk)
+        self.assertEqual(result["status"], "not_configured")
+        artifact = json.loads((run_dir / "JEV_RESEARCH_REVIEW.json").read_text())
+        self.assertEqual(artifact["status"], "not_configured")
+        _, _, manifest = load_run(run_dir)
+        self.assertEqual(manifest["state"], "research_pending")
+        self.assertEqual(manifest["jev"]["reviews"]["research"]["status"], "not_configured")
+
+    def test_phase_review_uses_narrow_questions_and_preserves_state(self) -> None:
+        response = self.FakeResponse()
+        response.answers = {
+            "evidence_supported": self.FakeAnswer(noul=0.92),
+            "unresolved_material_gap": self.FakeAnswer(noul=0.08),
+        }
+        self.FakeClient.response = response
+        run_dir, _ = start_run(self.root, "Review with Jev", jev_enabled=True)
+        (run_dir / "RESEARCH.md").write_text("Claim with source app.py:1\n", encoding="utf-8")
+        result = review_phase(
+            run_dir,
+            "research",
+            environ={"TYPESAFE_API_KEY": "secret"},
+            sdk=self.sdk,
+        )
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["answers"]["evidence_supported"]["noul"], 0.92)
+        self.assertNotIn("secret", json.dumps(result))
+        self.assertEqual(set(self.FakeClient.calls[0]["questions"]), {
+            "evidence_supported", "request_coverage", "unresolved_material_gap",
+        })
+        _, _, manifest = load_run(run_dir)
+        self.assertEqual(manifest["state"], "research_pending")
+
+        review_phase(
+            run_dir,
+            "research",
+            environ={"TYPESAFE_API_KEY": "secret"},
+            sdk=self.sdk,
+        )
+        archived = list((run_dir / "history").glob("*--JEV_RESEARCH_REVIEW.json"))
+        self.assertEqual(len(archived), 1)
+
+    def test_external_error_is_contained(self) -> None:
+        self.FakeClient.response = None
+        self.FakeClient.error = TimeoutError("secret should not escape")
+        run_dir, _ = start_run(self.root, "Review with Jev", jev_enabled=True)
+        (run_dir / "RESEARCH.md").write_text("Evidence\n", encoding="utf-8")
+        result = review_phase(
+            run_dir,
+            "research",
+            environ={"TYPESAFE_API_KEY": "secret"},
+            sdk=self.sdk,
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_type"], "TimeoutError")
+        self.assertNotIn("secret", json.dumps(result))
+
+    def test_phase_state_is_enforced(self) -> None:
+        run_dir, _ = start_run(self.root, "Review with Jev", jev_enabled=True)
+        with self.assertRaisesRegex(RPIError, "cannot run"):
+            review_phase(
+                run_dir,
+                "plan",
+                environ={"TYPESAFE_API_KEY": "secret"},
+                sdk=self.sdk,
+            )
 
 
 class BootstrapTests(RepoCase):

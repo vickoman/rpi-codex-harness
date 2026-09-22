@@ -38,5 +38,10 @@ datos, migraciones/borrados, fallo seguro y rollback aplicable.
 La aprobación técnica no equivale a aceptación humana. Solo una respuesta
 explícita permite `diff-accepted`.
 
+Si el manifest habilita Jev, después de escribir `DIFF_REVIEW.md` ejecuta
+`rpi_jev.py --phase implement` antes de decidir `diff-approved` o
+`diff-rejected`. Jev compara solicitud, plan, delta y validación; la revisión
+técnica determinista conserva toda la autoridad.
+
 Tras `diff_rejected`, una dirección humana para corregir dentro del plan aplica
 `rework-approved`. Un cambio de alcance requiere una brecha o un run nuevo.

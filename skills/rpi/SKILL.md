@@ -50,6 +50,28 @@ Si la solicitud es inequívoca, no pidas elegir un modo. Avanza por trabajo ya
 autorizado y pausa únicamente cuando falte una decisión material, un gate real o
 evidencia necesaria.
 
+## Jev opcional
+
+Si la persona invoca `$rpi --jev` o pide explícitamente usar Jev, inicia el run
+con `rpi_state.py start --jev`. El manifest conserva esa elección durante todo
+el run. No habilites Jev por inferencia ni para un run ya iniciado sin una nueva
+decisión explícita.
+
+En un run con `manifest.jev.enabled=true`, ejecuta `rpi_jev.py` exactamente una
+vez por versión relevante del artifact, antes del evento que abandona cada fase:
+
+- `--phase research`, después de escribir `RESEARCH.md` y antes de
+  `research-complete`;
+- `--phase plan`, después de escribir `PLAN.md` y antes de `plan-ready`;
+- `--phase implement`, en `diff_review_pending`, después de escribir
+  `DIFF_REVIEW.md` y antes de `diff-approved` o `diff-rejected`.
+
+Presenta las probabilidades y advertencias como asesoría. Jev nunca aplica
+eventos, cambia riesgo, concede aprobaciones, interpreta consentimiento ni
+reemplaza revisión determinista o gates humanos. `not_configured`,
+`sdk_unavailable` y `error` son fail-open: informa el estado y continúa el flujo
+normal. No copies credenciales ni mensajes externos de excepción a artifacts.
+
 ## Invariantes
 
 - `standard` y `high-risk` requieren aprobación humana después del preflight y
