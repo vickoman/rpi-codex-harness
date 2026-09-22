@@ -5,10 +5,10 @@ revisión, implementación controlada y aceptación humana del diff.
 
 ## Estado
 
-La versión v0.2 consolida el workflow en un skill autocontenido, añade una
+La versión v0.3 consolida el workflow en un skill autocontenido, añade una
 máquina de estados determinista, snapshots para worktrees sucios, artifacts
-atómicos y una suite de regresión. Los runs v0.1 con `manifest.yaml` permanecen
-read-only.
+atómicos, una suite de regresión y revisiones Jev opt-in por fase. Los runs v0.1
+con `manifest.yaml` permanecen read-only.
 
 El repositorio es la raíz del plugin. La implementación no crea por sí sola una
 entrada en el marketplace personal ni modifica aliases globales.
@@ -54,6 +54,15 @@ Continúa el run RPI hasta el siguiente gate humano.
 Acepto el diff del run RPI.
 ```
 
+Para activar revisiones consultivas de Jev durante un run nuevo:
+
+```text
+Usa $rpi --jev para implementar <cambio>.
+```
+
+Sin `--jev`, RPI conserva el flujo tradicional, no importa el SDK de TypeSafe,
+no exige credenciales y no envía contenido fuera del entorno local.
+
 Los artifacts de cada ejecución viven en:
 
 ```text
@@ -93,11 +102,55 @@ El resultado se guarda bajo `evals/results/<timestamp>/summary.json` e incluye:
 - tokens reportados por Codex;
 - estado final, tests, commits y archivos modificados por cada run.
 
-## Evaluación semántica opcional con Jev
+## RPI con revisiones Jev por fase
 
-Jev es el modelo System One de TypeSafe. En este proyecto se usa únicamente como
-grader experimental del runner live: no participa en ejecuciones normales de
-RPI y no controla la máquina de estados, riesgo, approvals ni gates humanos.
+Jev puede participar de forma aditiva en un run nuevo. Configura la credencial
+en el proceso que ejecuta Codex y usa el flag conversacional:
+
+```bash
+export TYPESAFE_API_KEY="..."
+```
+
+```text
+Usa $rpi --jev para implementar <cambio>.
+```
+
+El flag queda registrado en `manifest.json`. RPI ejecuta una llamada agrupada
+en cada punto relevante:
+
+| Momento | Artifact | Juicios principales |
+| --- | --- | --- |
+| Después de Research | `JEV_RESEARCH_REVIEW.json` | respaldo de evidencia, cobertura y brechas materiales |
+| Después de Plan | `JEV_PLAN_REVIEW.json` | cobertura, trazabilidad, validación observable y scope |
+| Después de validar y revisar el diff | `JEV_IMPLEMENT_REVIEW.json` | completitud, calidad de validación y alineación del diff |
+
+Los resultados son consultivos y fail-open. Jev no aplica eventos, modifica el
+riesgo, concede approvals ni sustituye gates humanos. Si falta la key o el SDK,
+o la llamada falla, el artifact registra `not_configured`, `sdk_unavailable` o
+`error` y RPI continúa por sus reglas normales.
+
+La forma equivalente a bajo nivel para iniciar y revisar una fase es:
+
+```bash
+python3 skills/rpi/scripts/rpi_state.py start \
+  --project-root /repo \
+  --task "<cambio>" \
+  --jev
+
+python3 skills/rpi/scripts/rpi_jev.py \
+  --run-dir /repo/.codex/rpi/runs/<run-id> \
+  --phase research
+```
+
+`--jev-model` y `--jev-timeout` permiten cambiar los defaults `jev-latest` y
+30 segundos al iniciar el run. La API key nunca se guarda en el manifest ni en
+los artifacts.
+
+## Evaluación semántica opcional del benchmark con Jev
+
+El benchmark live conserva su grader independiente para comparar variantes
+completas. Al igual que las revisiones de fase, no controla la máquina de
+estados, riesgo, approvals ni gates humanos.
 
 La integración es opcional y lazy. Sin `--typesafe-semantic-grade`, el runner no
 importa el SDK, no requiere `TYPESAFE_API_KEY`, no envía contenido a TypeSafe y

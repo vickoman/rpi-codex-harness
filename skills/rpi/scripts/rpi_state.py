@@ -21,6 +21,9 @@ def parser() -> argparse.ArgumentParser:
     start.add_argument("--risk-mode", choices=("simple", "standard", "high-risk"), default="standard")
     start.add_argument("--model", default="unknown")
     start.add_argument("--reasoning-effort", default="unknown")
+    start.add_argument("--jev", action="store_true", help="Enable optional fail-open Jev phase reviews")
+    start.add_argument("--jev-model", default="jev-latest")
+    start.add_argument("--jev-timeout", type=float, default=30.0)
     for name in ("status", "validate"):
         command = commands.add_parser(name)
         command.add_argument("--run-dir", required=True)
@@ -37,7 +40,15 @@ def main() -> int:
     try:
         if args.command == "start":
             run_dir, manifest = start_run(
-                args.project_root, args.task, args.ticket, args.risk_mode, args.model, args.reasoning_effort
+                args.project_root,
+                args.task,
+                args.ticket,
+                args.risk_mode,
+                args.model,
+                args.reasoning_effort,
+                args.jev,
+                args.jev_model,
+                args.jev_timeout,
             )
             payload = {"run_dir": str(run_dir), **status_payload(manifest)}
         else:

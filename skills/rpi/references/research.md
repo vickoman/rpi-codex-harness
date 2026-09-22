@@ -30,3 +30,7 @@ archivos/símbolos/pruebas, riesgos, cambios a preservar y handoff factual.
 - Sin evidencia suficiente: aplica `block` con causa y siguiente acción segura.
 
 No incluyas pasos de implementación.
+
+Si el manifest habilita Jev, ejecuta `rpi_jev.py --phase research` después de
+escribir el artifact y antes de la transición. Su resultado es consultivo y no
+cambia cuál de las transiciones anteriores corresponde.

@@ -14,6 +14,9 @@
     PLAN_REVIEW.md
     IMPLEMENTATION.md
     DIFF_REVIEW.md
+    JEV_RESEARCH_REVIEW.json
+    JEV_PLAN_REVIEW.json
+    JEV_IMPLEMENT_REVIEW.json
     GAPS.md
     history/
     logs/
@@ -42,6 +45,8 @@ python3 scripts/rpi_bootstrap.py --project-root /repo --apply  # autorizado
 - approvals de implementación y diff con actor, timestamp y bindings de
   workspace/alcance/diff. La autorización de commit queda fuera del harness.
 - digest de la revisión técnica para impedir aceptar un diff posterior distinto.
+- configuración Jev opt-in (`enabled`, modelo y timeout) y resumen de sus
+  revisiones no autoritativas; nunca contiene la API key.
 
 El script escribe el manifest de forma atómica bajo lock. No lo edites a mano.
 
@@ -58,6 +63,8 @@ El script escribe el manifest de forma atómica bajo lock. No lo edites a mano.
 - `DIFF_REVIEW.md`: delta desde baseline, mapeo por archivo/hunk, validaciones,
   riesgos, hallazgos y decisión técnica.
 - `GAPS.md`: pregunta y respuesta trazables por ID.
+- `JEV_*_REVIEW.json`: status, preguntas tipadas, probabilidades, uso y metadata
+  no autoritativa de la revisión opcional de fase.
 
 Antes de reemplazar un artifact, archívalo con timestamp UTC bajo `history/`.
 No guardes secretos en artifacts o logs; usa `rpi_log.py` para salidas de comandos.

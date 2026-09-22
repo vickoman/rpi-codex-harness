@@ -31,3 +31,7 @@ dentro del alcance. Una revisión no puede eludir una brecha.
 - Plan completo: aplica `plan-ready` y continúa a Review plan.
 - Brecha: aplica `gap-opened` y pausa.
 - Deriva o evidencia insuficiente: aplica `block`.
+
+Si el manifest habilita Jev, ejecuta `rpi_jev.py --phase plan` después de
+escribir `PLAN.md` y antes de `plan-ready`. Una advertencia se presenta junto a
+la revisión normal, pero no decide la transición.

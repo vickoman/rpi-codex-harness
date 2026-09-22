@@ -1,6 +1,6 @@
 {
   "name": "rpi-codex-harness",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Evidence-driven Research, Plan, Implement workflow for controlled code changes in Codex.",
   "author": {
     "name": "vickoman",
